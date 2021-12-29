@@ -17,12 +17,16 @@ namespace StarterAssets
 		[Header("Player")]
 		[Tooltip("Move speed of the character in m/s")]
 		public float MoveSpeed = 4.0f;
+		[Tooltip("Strafe speed of the character in m/s")]
+		public float StrafeSpeed = 2.0f;
 		[Tooltip("Sprint speed of the character in m/s")]
 		public float SprintSpeed = 6.0f;
+		[Tooltip("Max lateral speed of the character in m/s")]
+		public float MaxSpeed = 15.0f;
 		[Tooltip("Rotation speed of the character")]
 		public float RotationSpeed = 1.0f;
-		[Tooltip("Acceleration and deceleration")]
-		public float SpeedChangeRate = 10.0f;
+		[Tooltip("Amount of friction to apply when grounded")]
+		public float Friction = 2f;
 
 		[Space(10)]
 		[Tooltip("The height the player can jump")]
@@ -141,10 +145,24 @@ namespace StarterAssets
 			// if there is no input, set the target speed to 0
 			if (_input.move == Vector2.zero) targetSpeed = 0.0f;
 
-			// a reference to the players current horizontal velocity
-			float currentHorizontalSpeed = new Vector3(_controller.velocity.x, 0.0f, _controller.velocity.z).magnitude;
+			Vector3 moveSpeedX = (transform.right * _input.move.x).normalized * StrafeSpeed;
+			Vector3 moveSpeedY = (transform.forward * _input.move.y).normalized * targetSpeed;
+			Vector3 moveSpeed = moveSpeedX + moveSpeedY;
 
-			float speedOffset = 0.1f;
+			// a reference to the players current horizontal velocity
+			Vector3 currentHorizontalSpeed = new Vector3(_controller.velocity.x, 0.0f, _controller.velocity.z);
+
+			Vector3 targetMoveSpeed = moveSpeed + currentHorizontalSpeed;
+
+			if (Grounded)
+			{
+				targetMoveSpeed = targetMoveSpeed / (1f + (Friction / 10f));
+				if (targetMoveSpeed.magnitude < 0.1f) targetMoveSpeed = Vector3.zero;
+			}
+
+			Vector3 cappedTargetSpeed = targetMoveSpeed.magnitude > MaxSpeed ? targetMoveSpeed.normalized * MaxSpeed : targetMoveSpeed;
+
+			/*float speedOffset = 0.1f;
 			float inputMagnitude = _input.analogMovement ? _input.move.magnitude : 1f;
 
 			// accelerate or decelerate to target speed
@@ -152,7 +170,7 @@ namespace StarterAssets
 			{
 				// creates curved result rather than a linear one giving a more organic speed change
 				// note T in Lerp is clamped, so we don't need to clamp our speed
-				_speed = Mathf.Lerp(currentHorizontalSpeed, targetSpeed * inputMagnitude, Time.deltaTime * SpeedChangeRate);
+				_speed = Mathf.Lerp(currentHorizontalSpeed, cappedTargetSpeed * inputMagnitude, Time.deltaTime * SpeedChangeRate);
 
 				// round speed to 3 decimal places
 				_speed = Mathf.Round(_speed * 1000f) / 1000f;
@@ -171,10 +189,10 @@ namespace StarterAssets
 			{
 				// move
 				inputDirection = transform.right * _input.move.x + transform.forward * _input.move.y;
-			}
+			}*/
 
 			// move the player
-			_controller.Move(inputDirection.normalized * (_speed * Time.deltaTime) + new Vector3(0.0f, _verticalVelocity, 0.0f) * Time.deltaTime);
+			_controller.Move((cappedTargetSpeed * Time.deltaTime) + new Vector3(0.0f, _verticalVelocity, 0.0f) * Time.deltaTime);
 		}
 
 		private void JumpAndGravity()
