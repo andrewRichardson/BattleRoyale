@@ -23,6 +23,8 @@ namespace StarterAssets
 		public float SprintSpeed = 6.0f;
 		[Tooltip("Max lateral speed of the character in m/s")]
 		public float MaxSpeed = 15.0f;
+		[Tooltip("Max sprint lateral speed of the character in m/s")]
+		public float MaxSprintSpeed = 4.0f;
 		[Tooltip("Rotation speed of the character")]
 		public float RotationSpeed = 1.0f;
 		[Tooltip("Amount of friction to apply when grounded")]
@@ -37,12 +39,16 @@ namespace StarterAssets
 		[Space(10)]
 		[Tooltip("Time required to pass before being able to jump again. Set to 0f to instantly jump again")]
 		public float JumpTimeout = 0.1f;
+		[Tooltip("Time allowed to pass before not being able to jump after falling. Useful for jumping off stairs and downward slopes")]
+		public float JumpTimeoutWindow = 0.1f;
 		[Tooltip("Time required to pass before entering the fall state. Useful for walking down stairs")]
 		public float FallTimeout = 0.15f;
 
 		[Header("Player Grounded")]
 		[Tooltip("If the character is grounded or not. Not part of the CharacterController built in grounded check")]
 		public bool Grounded = true;
+		[Tooltip("If the character is sprinting")]
+		public bool Sprint = false;
 		[Tooltip("Useful for rough ground")]
 		public float GroundedOffset = -0.14f;
 		[Tooltip("The radius of the grounded check. Should match the radius of the CharacterController")]
@@ -62,13 +68,13 @@ namespace StarterAssets
 		private float _cinemachineTargetPitch;
 
 		// player
-		private float _speed;
 		private float _rotationVelocity;
 		private float _verticalVelocity;
 		private float _terminalVelocity = 53.0f;
 
 		// timeout deltatime
 		private float _jumpTimeoutDelta;
+		private float _jumpTimeoutWindow;
 		private float _fallTimeoutDelta;
 
 		private CharacterController _controller;
@@ -112,7 +118,11 @@ namespace StarterAssets
 		{
 			// set sphere position, with offset
 			Vector3 spherePosition = new Vector3(transform.position.x, transform.position.y - GroundedOffset, transform.position.z);
+			if (Grounded) _jumpTimeoutWindow = 0;
 			Grounded = Physics.CheckSphere(spherePosition, GroundedRadius, GroundLayers, QueryTriggerInteraction.Ignore);
+			if (!Grounded && _jumpTimeoutWindow == 0) _jumpTimeoutWindow = JumpTimeoutWindow;
+			if (Grounded && _input.sprint) Sprint = true;
+			if (Grounded && !_input.sprint) Sprint = false;
 		}
 
 		private void CameraRotation()
@@ -137,9 +147,9 @@ namespace StarterAssets
 		private void Move()
 		{
 			// set target speed based on move speed, sprint speed and if sprint is pressed
-			float targetSpeed = _input.sprint ? SprintSpeed : MoveSpeed;
+			float targetSpeed = Sprint ? SprintSpeed : MoveSpeed;
 
-			// a simplistic acceleration and deceleration designed to be easy to remove, replace, or iterate upon
+			float maxSpeed = Sprint ? MaxSprintSpeed : MaxSpeed;
 
 			// note: Vector2's == operator uses approximation so is not floating point error prone, and is cheaper than magnitude
 			// if there is no input, set the target speed to 0
@@ -154,42 +164,13 @@ namespace StarterAssets
 
 			Vector3 targetMoveSpeed = moveSpeed + currentHorizontalSpeed;
 
-			if (Grounded)
+			if (Grounded && _input.move == Vector2.zero)
 			{
 				targetMoveSpeed = targetMoveSpeed / (1f + (Friction / 10f));
-				if (targetMoveSpeed.magnitude < 0.1f) targetMoveSpeed = Vector3.zero;
 			}
+			if (targetMoveSpeed.magnitude < 0.1f) targetMoveSpeed = Vector3.zero;
 
-			Vector3 cappedTargetSpeed = targetMoveSpeed.magnitude > MaxSpeed ? targetMoveSpeed.normalized * MaxSpeed : targetMoveSpeed;
-
-			/*float speedOffset = 0.1f;
-			float inputMagnitude = _input.analogMovement ? _input.move.magnitude : 1f;
-
-			// accelerate or decelerate to target speed
-			if (currentHorizontalSpeed < targetSpeed - speedOffset || currentHorizontalSpeed > targetSpeed + speedOffset)
-			{
-				// creates curved result rather than a linear one giving a more organic speed change
-				// note T in Lerp is clamped, so we don't need to clamp our speed
-				_speed = Mathf.Lerp(currentHorizontalSpeed, cappedTargetSpeed * inputMagnitude, Time.deltaTime * SpeedChangeRate);
-
-				// round speed to 3 decimal places
-				_speed = Mathf.Round(_speed * 1000f) / 1000f;
-			}
-			else
-			{
-				_speed = targetSpeed;
-			}
-
-			// normalise input direction
-			Vector3 inputDirection = new Vector3(_input.move.x, 0.0f, _input.move.y).normalized;
-
-			// note: Vector2's != operator uses approximation so is not floating point error prone, and is cheaper than magnitude
-			// if there is a move input rotate player when the player is moving
-			if (_input.move != Vector2.zero)
-			{
-				// move
-				inputDirection = transform.right * _input.move.x + transform.forward * _input.move.y;
-			}*/
+			Vector3 cappedTargetSpeed = targetMoveSpeed.magnitude > maxSpeed ? targetMoveSpeed.normalized * MaxSpeed : targetMoveSpeed;
 
 			// move the player
 			_controller.Move((cappedTargetSpeed * Time.deltaTime) + new Vector3(0.0f, _verticalVelocity, 0.0f) * Time.deltaTime);
@@ -197,7 +178,7 @@ namespace StarterAssets
 
 		private void JumpAndGravity()
 		{
-			if (Grounded)
+			if (Grounded || _jumpTimeoutWindow > 0)
 			{
 				// reset the fall timeout timer
 				_fallTimeoutDelta = FallTimeout;
@@ -220,6 +201,8 @@ namespace StarterAssets
 				{
 					_jumpTimeoutDelta -= Time.deltaTime;
 				}
+
+				_jumpTimeoutWindow -= Time.deltaTime;
 			}
 			else
 			{
@@ -248,18 +231,6 @@ namespace StarterAssets
 			if (lfAngle < -360f) lfAngle += 360f;
 			if (lfAngle > 360f) lfAngle -= 360f;
 			return Mathf.Clamp(lfAngle, lfMin, lfMax);
-		}
-
-		private void OnDrawGizmosSelected()
-		{
-			Color transparentGreen = new Color(0.0f, 1.0f, 0.0f, 0.35f);
-			Color transparentRed = new Color(1.0f, 0.0f, 0.0f, 0.35f);
-
-			if (Grounded) Gizmos.color = transparentGreen;
-			else Gizmos.color = transparentRed;
-
-			// when selected, draw a gizmo in the position of, and matching radius of, the grounded collider
-			Gizmos.DrawSphere(new Vector3(transform.position.x, transform.position.y - GroundedOffset, transform.position.z), GroundedRadius);
 		}
 	}
 }
