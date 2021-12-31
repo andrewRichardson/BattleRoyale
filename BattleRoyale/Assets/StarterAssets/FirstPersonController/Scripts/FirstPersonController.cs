@@ -12,6 +12,7 @@ namespace StarterAssets
 #if ENABLE_INPUT_SYSTEM && STARTER_ASSETS_PACKAGES_CHECKED
 	[RequireComponent(typeof(PlayerInput))]
 #endif
+	[RequireComponent(typeof(InventoryController))]
 	public class FirstPersonController : MonoBehaviour
 	{
 		[Header("Player")]
@@ -56,6 +57,15 @@ namespace StarterAssets
 		[Tooltip("What layers the character uses as ground")]
 		public LayerMask GroundLayers;
 
+		[Header("Equipment Abilities")]
+		[Tooltip("If the character has the Strafe Pack")]
+		public bool CanStrafe = false;
+		[Tooltip("If the character has the Grapple Hook")]
+		public bool CanGrapple = false;
+		[Tooltip("If the character has the Grip Rig")]
+		public bool CanGripRig = false;
+		private InventoryController inventory;
+
 		[Header("Cinemachine")]
 		[Tooltip("The follow target set in the Cinemachine Virtual Camera that the camera will follow")]
 		public GameObject CinemachineCameraTarget;
@@ -96,6 +106,8 @@ namespace StarterAssets
 		{
 			_controller = GetComponent<CharacterController>();
 			_input = GetComponent<StarterAssetsInputs>();
+			inventory = GetComponent<InventoryController>();
+			if (inventory) inventory.equip("StrafePack");
 
 			// reset our timeouts on start
 			_jumpTimeoutDelta = JumpTimeout;
@@ -104,6 +116,10 @@ namespace StarterAssets
 
 		private void Update()
 		{
+			CanStrafe = inventory.isEquipped("StrafePack");
+			CanGrapple = inventory.isEquipped("GrappleHook");
+			CanGripRig = inventory.isEquipped("GripRig");
+
 			JumpAndGravity();
 			GroundedCheck();
 			Move();
@@ -149,7 +165,9 @@ namespace StarterAssets
 			// set target speed based on move speed, sprint speed and if sprint is pressed
 			float targetSpeed = Sprint ? SprintSpeed : MoveSpeed;
 
-			float maxSpeed = Sprint ? MaxSprintSpeed : MaxSpeed;
+			float maxSpeed = MaxSpeed;
+
+			if (Sprint) maxSpeed = MaxSprintSpeed;
 
 			// note: Vector2's == operator uses approximation so is not floating point error prone, and is cheaper than magnitude
 			// if there is no input, set the target speed to 0

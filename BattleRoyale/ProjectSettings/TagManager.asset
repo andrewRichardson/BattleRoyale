@@ -5,6 +5,7 @@ TagManager:
   serializedVersion: 2
   tags:
   - CinemachineTarget
+  - Equipment_Manager
   layers:
   - Default
   - TransparentFX
@@ -12,7 +13,7 @@ TagManager:
   - Player
   - Water
   - UI
-  - 
+  - Pushable
   - 
   - 
   - 
